@@ -25,6 +25,7 @@ import (
 	"github.com/devtron-labs/devtron/pkg/user"
 	"github.com/devtron-labs/devtron/pkg/user/casbin"
 	"github.com/gorilla/mux"
+	"github.com/juju/errors"
 	"go.uber.org/zap"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
@@ -79,6 +80,13 @@ func (impl ExternalLinkoutRestHandlerImpl) CreateExternalLinks(w http.ResponseWr
 		common.WriteJsonResp(w, err, nil, http.StatusBadRequest)
 		return
 	}
+
+	token := r.Header.Get("token")
+	if ok := impl.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionCreate, "*"); !ok {
+		common.WriteJsonResp(w, errors.New("unauthorized"), nil, http.StatusForbidden)
+		return
+	}
+
 	res, err := impl.externalLinkoutService.Create(beans, userId)
 	if err != nil {
 		impl.logger.Errorw("service err, SaveLink", "err", err, "payload", beans)
@@ -93,6 +101,16 @@ func (impl ExternalLinkoutRestHandlerImpl) GetExternalLinksTools(w http.Response
 		common.WriteJsonResp(w, err, "Unauthorized User", http.StatusUnauthorized)
 		return
 	}
+
+	// auth free api as we using this for multiple places
+	/*
+		token := r.Header.Get("token")
+		if ok := impl.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionGet, "*"); !ok {
+			common.WriteJsonResp(w, errors.New("unauthorized"), nil, http.StatusForbidden)
+			return
+		}
+	*/
+
 	res, err := impl.externalLinkoutService.GetAllActiveTools()
 	if err != nil {
 		impl.logger.Errorw("service err, GetAllActiveTools", "err", err)
@@ -118,6 +136,16 @@ func (impl ExternalLinkoutRestHandlerImpl) GetExternalLinks(w http.ResponseWrite
 			return
 		}
 	}
+
+	//apply auth only in case when requested for all links
+	if clusterId == 0 {
+		token := r.Header.Get("token")
+		if ok := impl.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionGet, "*"); !ok {
+			common.WriteJsonResp(w, errors.New("unauthorized"), nil, http.StatusForbidden)
+			return
+		}
+	}
+
 	res, err := impl.externalLinkoutService.FetchAllActiveLinks(clusterId)
 	if err != nil {
 		impl.logger.Errorw("service err, FetchAllActive", "err", err)
@@ -141,6 +169,13 @@ func (impl ExternalLinkoutRestHandlerImpl) UpdateExternalLinks(w http.ResponseWr
 		return
 	}
 	bean.UserId = userId
+
+	token := r.Header.Get("token")
+	if ok := impl.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionUpdate, "*"); !ok {
+		common.WriteJsonResp(w, errors.New("unauthorized"), nil, http.StatusForbidden)
+		return
+	}
+
 	impl.logger.Infow("request payload, UpdateLink", "err", err, "bean", bean)
 	res, err := impl.externalLinkoutService.Update(&bean)
 	if err != nil {
@@ -164,6 +199,13 @@ func (impl ExternalLinkoutRestHandlerImpl) DeleteExternalLinks(w http.ResponseWr
 		common.WriteJsonResp(w, err, nil, http.StatusBadRequest)
 		return
 	}
+
+	token := r.Header.Get("token")
+	if ok := impl.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionDelete, "*"); !ok {
+		common.WriteJsonResp(w, errors.New("unauthorized"), nil, http.StatusForbidden)
+		return
+	}
+
 	var bean externalLinkout.ExternalLinkoutRequest
 	bean.Id = idi
 	res, err := impl.externalLinkoutService.DeleteLink(idi, userId)
