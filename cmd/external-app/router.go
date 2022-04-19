@@ -8,7 +8,7 @@ import (
 	"github.com/devtron-labs/devtron/api/chartRepo"
 	"github.com/devtron-labs/devtron/api/cluster"
 	"github.com/devtron-labs/devtron/api/dashboardEvent"
-	"github.com/devtron-labs/devtron/api/externalLinks"
+	"github.com/devtron-labs/devtron/api/externalLink"
 	client "github.com/devtron-labs/devtron/api/helm-app"
 	"github.com/devtron-labs/devtron/api/restHandler/common"
 	"github.com/devtron-labs/devtron/api/sso"
@@ -40,7 +40,7 @@ type MuxRouter struct {
 	appStoreDeploymentRouter appStoreDeployment.AppStoreDeploymentRouter
 	dashboardTelemetryRouter dashboardEvent.DashboardTelemetryRouter
 	commonDeploymentRouter   appStoreDeployment.CommonDeploymentRouter
-	externalLinksRouter      externalLinks.ExternalLinksRouter
+	externalLinksRouter      externalLink.ExternalLinkRouter
 }
 
 func NewMuxRouter(
@@ -60,7 +60,7 @@ func NewMuxRouter(
 	appStoreDeploymentRouter appStoreDeployment.AppStoreDeploymentRouter,
 	dashboardTelemetryRouter dashboardEvent.DashboardTelemetryRouter,
 	commonDeploymentRouter appStoreDeployment.CommonDeploymentRouter,
-	externalLinksRouter externalLinks.ExternalLinksRouter,
+	externalLinkRouter externalLink.ExternalLinkRouter,
 ) *MuxRouter {
 	r := &MuxRouter{
 		Router:                   mux.NewRouter(),
@@ -80,7 +80,7 @@ func NewMuxRouter(
 		appStoreDeploymentRouter: appStoreDeploymentRouter,
 		dashboardTelemetryRouter: dashboardTelemetryRouter,
 		commonDeploymentRouter:   commonDeploymentRouter,
-		externalLinksRouter:      externalLinksRouter,
+		externalLinksRouter:      externalLinkRouter,
 	}
 	return r
 }
@@ -167,6 +167,6 @@ func (r *MuxRouter) Init() {
 	r.dashboardTelemetryRouter.Init(dashboardTelemetryRouter)
 	// dashboard event router ends
 
-	externalLinksRouter := r.Router.PathPrefix("/orchestrator/external-links").Subrouter()
-	r.externalLinksRouter.InitExternalLinksRouter(externalLinksRouter)
+	externalLinkRouter := r.Router.PathPrefix("/orchestrator/external-links").Subrouter()
+	r.externalLinksRouter.InitExternalLinkRouter(externalLinkRouter)
 }
