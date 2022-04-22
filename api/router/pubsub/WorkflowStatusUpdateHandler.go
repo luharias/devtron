@@ -28,6 +28,8 @@ import (
 	"github.com/devtron-labs/devtron/util/event"
 	"github.com/nats-io/stan.go"
 	"go.uber.org/zap"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -87,6 +89,20 @@ func (impl *WorkflowStatusUpdateHandlerImpl) Subscribe() error {
 			impl.logger.Errorw("error on wf status update", "err", err, "msg", string(msg.Data))
 			return
 		}
+		impl.logger.Infow("onexit3 testing", "wfstatus", wfStatus) //need to be removed
+
+		//validate name
+		workflowName := ""
+		for name, _ := range wfStatus.Nodes {
+			workflowName = name
+			break
+		}
+
+		_, err = strconv.Atoi(workflowName[:strings.Index(workflowName, "-")])
+		if err != nil {
+			return
+		}
+
 		_, err = impl.ciHandler.UpdateWorkflow(wfStatus)
 		if err != nil {
 			impl.logger.Errorw("error on update workflow status", "err", err, "msg", string(msg.Data))
@@ -111,6 +127,19 @@ func (impl *WorkflowStatusUpdateHandlerImpl) SubscribeCD() error {
 			impl.logger.Error("err", err)
 			return
 		}
+
+		//validate name
+		workflowName := ""
+		for name, _ := range wfStatus.Nodes {
+			workflowName = name
+			break
+		}
+
+		_, err = strconv.Atoi(workflowName[:strings.Index(workflowName, "-")])
+		if err != nil {
+			return
+		}
+
 		impl.logger.Debugw("received cd wf update request body", "body", wfStatus)
 		wfrId, wfrStatus, err := impl.cdHandler.UpdateWorkflow(wfStatus)
 		impl.logger.Debug(wfrId)

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/argoproj/argo-cd/pkg/apiclient/application"
@@ -45,7 +46,7 @@ const (
 	TimeoutSlow = 30 * time.Second
 	TimeoutLazy = 60 * time.Second
 	HIBERNATING = "HIBERNATING"
-	SUCCEEDED = "Succeeded"
+	SUCCEEDED   = "Succeeded"
 )
 
 type ServiceClient interface {
@@ -376,12 +377,15 @@ func (c ServiceClientImpl) ResourceTree(ctxt context.Context, query *application
 	defer util.Close(conn, c.logger)
 	asc := application.NewApplicationServiceClient(conn)
 	c.logger.Debugw("GRPC_GET_RESOURCETREE", "req", query)
+	c.logger.Infow("test ResourceTree 1", "query", query)
 	resp, err := asc.ResourceTree(ctx, query)
+	c.logger.Infow("test ResourceTree 2", "resp", resp)
 	if err != nil {
 		c.logger.Errorw("GRPC_GET_RESOURCETREE", "req", query, "err", err)
 		return nil, err
 	}
 	responses := parseResult(resp, query, ctx, asc, err, c)
+	c.logger.Infow("test ResourceTree 3", "responses", responses, "query", query)
 	podMetadata, newReplicaSet := c.buildPodMetadata(resp, responses)
 
 	appQuery := application.ApplicationQuery{Name: query.ApplicationName}
@@ -416,6 +420,7 @@ func (c ServiceClientImpl) buildPodMetadata(resp *v1alpha1.ApplicationTree, resp
 	controllerRevisionManifests := make([]map[string]interface{}, 0)
 	jobsManifest := make(map[string]interface{})
 	for _, response := range responses {
+		c.logger.Infow("buildPodMetadata", "response", response)
 		if response != nil && response.Response != nil && response.Request.Kind == "Rollout" {
 			err := json.Unmarshal([]byte(response.Response.Manifest), &rolloutManifest)
 			if err != nil {
@@ -466,6 +471,8 @@ func (c ServiceClientImpl) buildPodMetadata(resp *v1alpha1.ApplicationTree, resp
 	}
 	newPodNames := make(map[string]bool, 0)
 	// for rollout we compare pod hash
+	c.logger.Infow("buildPodMetadata 1", "rolloutManifest", rolloutManifest, "replicaSetManifests", replicaSetManifests)
+	c.logger.Infow("buildPodMetadata 2", "statefulSetManifest", statefulSetManifest, "podManifests", podManifests)
 	if _, ok := rolloutManifest["kind"]; ok {
 		newReplicaSet = c.getRolloutNewReplicaSetName(rolloutManifest, replicaSetManifests)
 	}
@@ -486,23 +493,31 @@ func (c ServiceClientImpl) buildPodMetadata(resp *v1alpha1.ApplicationTree, resp
 		newPodNames = c.getJobsNewPods(jobsManifest, podManifests)
 	}
 
+	c.logger.Infow("buildPodMetadata 3", "newReplicaSet", newReplicaSet)
 	//podMetaData := make([]*PodMetadata, 0)
 	duplicateCheck := make(map[string]bool)
 	if newReplicaSet != "" {
 		results := buildPodMetadataFromReplicaSet(resp, newReplicaSet, replicaSetManifests)
+		c.logger.Infow("buildPodMetadata 4", "results", results)
 		for _, meta := range results {
+			c.logger.Infow("buildPodMetadata 5", "meta", meta)
 			duplicateCheck[meta.Name] = true
 			podMetaData = append(podMetaData, meta)
 		}
 	}
+	c.logger.Infow("buildPodMetadata 6", "newPodNames", newPodNames)
 	if newPodNames != nil {
+		c.logger.Infow("buildPodMetadata 7", "resp", resp, "podManifests", podManifests)
 		results := buildPodMetadataFromPod(resp, podManifests, newPodNames)
+		c.logger.Infow("buildPodMetadata 8", "results", results)
 		for _, meta := range results {
+			c.logger.Infow("buildPodMetadata 9", "meta", meta)
 			if _, ok := duplicateCheck[meta.Name]; !ok {
 				podMetaData = append(podMetaData, meta)
 			}
 		}
 	}
+	c.logger.Infow("buildPodMetadata 10", "podMetaData", podMetaData, "duplicateCheck", duplicateCheck)
 	return
 }
 
@@ -521,6 +536,7 @@ func parseResult(resp *v1alpha1.ApplicationTree, query *application.ResourcesQue
 			for _, pr := range node.ParentRefs {
 				podParents = append(podParents, pr.Name)
 			}
+			c.logger.Infow("parseResult 1 ", "Podparents", podParents, "node", node)
 		}
 	}
 	for _, node := range resp.Nodes {
@@ -535,7 +551,7 @@ func parseResult(resp *v1alpha1.ApplicationTree, query *application.ResourcesQue
 				}
 			}
 		}
-		if node.Kind == "StatefulSet" || node.Kind == "DaemonSet" {
+		if node.Kind == "StatefulSet" || node.Kind == "DaemonSet" || node.Kind == "Workflow" {
 			needPods = true
 		}
 
@@ -545,7 +561,7 @@ func parseResult(resp *v1alpha1.ApplicationTree, query *application.ResourcesQue
 		}
 	}
 
-	c.logger.Debugw("needPods", "pods", needPods)
+	c.logger.Infow("needPods", "pods", needPods)
 
 	if needPods {
 		for _, node := range resp.Nodes {
@@ -553,6 +569,7 @@ func parseResult(resp *v1alpha1.ApplicationTree, query *application.ResourcesQue
 				queryNodes = append(queryNodes, node)
 			}
 		}
+		c.logger.Infow("parseResult 3 ", "queryNodes", queryNodes)
 	}
 
 	relevantCR := make(map[string]bool)
@@ -589,10 +606,11 @@ func parseResult(resp *v1alpha1.ApplicationTree, query *application.ResourcesQue
 			if err != nil {
 				c.logger.Errorw("GRPC_GET_RESOURCE", "data", request, "timeTaken", time.Since(startTime), "err", err)
 			} else {
-				c.logger.Debugw("GRPC_GET_RESOURCE", "data", request, "timeTaken", time.Since(startTime))
+				c.logger.Infow("GRPC_GET_RESOURCE", "data", request, "timeTaken", time.Since(startTime))
 			}
 			if res != nil || err != nil {
 				response <- Result{Response: res, Error: err, Request: &request}
+				c.logger.Infow("parseResult 4 ", "response", response)
 			} else {
 				response <- Result{Response: nil, Error: fmt.Errorf("connection closed by client"), Request: &request}
 			}
@@ -753,7 +771,9 @@ func (c ServiceClientImpl) getRolloutNewReplicaSetName(rManifest map[string]inte
 		if podHash == rPodHash {
 			newReplicaSet = getResourceName(rs)
 		}
+		c.logger.Infow("onexit1 testing", "podhash", podHash) //testing purpose
 	}
+	c.logger.Infow("onexit2 testing", "rPodHash", rPodHash, "newReplicaSet", newReplicaSet) //testing purpose
 	return newReplicaSet
 }
 
@@ -790,6 +810,7 @@ func getRolloutPodTemplateHash(pod map[string]interface{}) string {
 func buildPodMetadataFromPod(resp *v1alpha1.ApplicationTree, podManifests []map[string]interface{}, newPodNames map[string]bool) (podMetadata []*PodMetadata) {
 	containerMapping := make(map[string][]*string)
 	initContainerMapping := make(map[string][]*string)
+	log.Println("buildPodMetadataFromPod ", "podManifests", podManifests, "newPodNames", newPodNames)
 	for _, pod := range podManifests {
 		containerMapping[getResourceName(pod)] = getPodContainers(pod)
 	}
@@ -798,9 +819,11 @@ func buildPodMetadataFromPod(resp *v1alpha1.ApplicationTree, podManifests []map[
 		initContainerMapping[getResourceName(pod)] = getPodInitContainers(pod)
 	}
 	for _, node := range resp.Nodes {
+		log.Println("buildPodMetadataFromPod 1", "node", node, "kind", node.Kind)
 		if node.Kind == "Pod" {
 			isNew := newPodNames[node.Name]
 			metadata := PodMetadata{Name: node.Name, UID: node.UID, Containers: containerMapping[node.Name], InitContainers: initContainerMapping[node.Name], IsNew: isNew}
+			log.Println("test metadata", "Pod metadata", metadata)
 			podMetadata = append(podMetadata, &metadata)
 		}
 	}
@@ -852,9 +875,11 @@ func getPodInitContainers(resource map[string]interface{}) []*string {
 
 func buildPodMetadataFromReplicaSet(resp *v1alpha1.ApplicationTree, newReplicaSet string, replicaSetManifests []map[string]interface{}) (podMetadata []*PodMetadata) {
 	replicaSets := make(map[string]map[string]interface{})
+	log.Println("buildPodMetadataFromReplicaSet 1", "newReplicaSet", newReplicaSet, "replicaSetManifests", replicaSetManifests)
 	for _, replicaSet := range replicaSetManifests {
 		replicaSets[getResourceName(replicaSet)] = replicaSet
 	}
+	log.Println("buildPodMetadataFromReplicaSet 2", "replicaSets", replicaSets, "resp", resp)
 	for _, node := range resp.Nodes {
 		if node.Kind == "Pod" {
 			parentName := ""
@@ -862,7 +887,11 @@ func buildPodMetadataFromReplicaSet(resp *v1alpha1.ApplicationTree, newReplicaSe
 				if p.Kind == "ReplicaSet" {
 					parentName = p.Name
 				}
+				if p.Kind == "Workflow" {
+					parentName = p.Name
+				}
 			}
+			log.Println("buildPodMetadataFromReplicaSet 3", "parentName", parentName, "newReplicaSet", newReplicaSet)
 			if parentName != "" {
 				isNew := parentName == newReplicaSet
 				replicaSet := replicaSets[parentName]
