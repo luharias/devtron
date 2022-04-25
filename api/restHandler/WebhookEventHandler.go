@@ -18,6 +18,8 @@
 package restHandler
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/devtron-labs/devtron/api/restHandler/common"
 	client "github.com/devtron-labs/devtron/client/events"
 	"github.com/devtron-labs/devtron/client/pubsub"
@@ -28,6 +30,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type WebhookEventHandler interface {
@@ -89,6 +92,32 @@ func (impl WebhookEventHandlerImpl) OnWebhookEvent(w http.ResponseWriter, r *htt
 	impl.logger.Infow("release info content ..", "X-GitHub-Event", r.Header.Get("X-GitHub-Event"))
 	impl.logger.Infow("release info content ..", "X-Hub-Signature", r.Header.Get("X-Hub-Signature"))
 	impl.logger.Infow("release info content ..", "SHA-1", r.Header.Get("SHA-1"))
+	data := make(map[string]interface{})
+	err = json.Unmarshal(requestBodyBytes, &data)
+	if err != nil {
+		impl.logger.Errorw("unmarshal error", "err", err)
+		return
+	}
+	action := data["action"].(string)
+	if action != "published" {
+		impl.logger.Infow("release info content .. no processing", "action", action)
+		return
+	} else {
+		impl.logger.Infow("release info content ..", "action", action)
+	}
+	releaseData := data["release"].(map[string]interface{})
+	releaseName := releaseData["name"].(string)
+	tagName := releaseData["tag_name"].(string)
+	createdAtString := releaseData["created_at"].(string)
+	createdAt, error := time.Parse("2006-01-02T15:04", createdAtString)
+	if error != nil {
+		fmt.Println(error)
+		//return
+	}
+	impl.logger.Infow("release info content ..", "releaseName", releaseName)
+	impl.logger.Infow("release info content ..", "tagName", tagName)
+	impl.logger.Infow("release info content ..", "bytes", r.Header)
+	impl.logger.Infow("release info content ..", "createdAt", createdAt)
 
 	isValidSig := impl.webhookSecretValidator.ValidateSecret(r, secretFromRequest, requestBodyBytes, gitHost)
 	impl.logger.Debug("Secret validation result ", isValidSig)
