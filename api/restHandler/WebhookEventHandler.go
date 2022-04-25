@@ -84,8 +84,11 @@ func (impl WebhookEventHandlerImpl) OnWebhookEvent(w http.ResponseWriter, r *htt
 		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	impl.logger.Infow("release info content ..", "bytes", requestBodyBytes)
 	impl.logger.Infow("release info content ..", "string", string(requestBodyBytes))
+	impl.logger.Infow("release info content ..", "bytes", r.Header)
+	impl.logger.Infow("release info content ..", "X-GitHub-Event", r.Header.Get("X-GitHub-Event"))
+	impl.logger.Infow("release info content ..", "X-Hub-Signature", r.Header.Get("X-Hub-Signature"))
+	impl.logger.Infow("release info content ..", "SHA-1", r.Header.Get("SHA-1"))
 
 	isValidSig := impl.webhookSecretValidator.ValidateSecret(r, secretFromRequest, requestBodyBytes, gitHost)
 	impl.logger.Debug("Secret validation result ", isValidSig)
