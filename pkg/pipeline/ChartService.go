@@ -339,10 +339,14 @@ func (impl ChartServiceImpl) Create(templateRequest TemplateRequest, ctx context
 	if err != nil {
 		return nil, err
 	}
+	t1 := time.Now()
+	impl.logger.Infow("gitops operation time testing", "time", time.Now().String(), "stage", "1")
 	chartValues, chartGitAttr, err := impl.chartTemplateService.CreateChart(chartMeta, refChart, templateName, templateRequest.UserId)
 	if err != nil {
 		return nil, err
 	}
+	t2 := time.Now()
+	impl.logger.Infow("gitops operation time testing", "time", time.Now().String(), "time diff", t2.Unix()-t1.Unix(), "stage", "END")
 	override, err := templateRequest.ValuesOverride.MarshalJSON()
 	if err != nil {
 		return nil, err

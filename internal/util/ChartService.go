@@ -166,6 +166,7 @@ type ChartGitAttribute struct {
 
 func (impl ChartTemplateServiceImpl) createAndPushToGit(gitOpsRepoName, baseTemplateName, version, tmpChartLocation string, userId int32) (chartGitAttribute *ChartGitAttribute, err error) {
 	//baseTemplateName  replace whitespace
+	t1 := time.Now()
 	space := regexp.MustCompile(`\s+`)
 	gitOpsRepoName = space.ReplaceAllString(gitOpsRepoName, "-")
 
@@ -182,7 +183,9 @@ func (impl ChartTemplateServiceImpl) createAndPushToGit(gitOpsRepoName, baseTemp
 	//getting user name & emailId for commit author data
 	userEmailId, userName := impl.GetUserEmailIdAndNameForGitOpsCommit(userId)
 	repoUrl, _, detailedError := impl.gitFactory.Client.CreateRepository(gitOpsRepoName, fmt.Sprintf("helm chart for "+gitOpsRepoName), gitOpsConfigBitbucket.BitBucketWorkspaceId, gitOpsConfigBitbucket.BitBucketProjectKey, userName, userEmailId)
-
+	t2 := time.Now()
+	impl.logger.Infow("gitops operation time testing", "time", time.Now().String(), "time diff", t2.Unix()-t1.Unix(), "stage", "1.1")
+	t1 = t2
 	for _, err := range detailedError.StageErrorMap {
 		if err != nil {
 			impl.logger.Errorw("error in creating git project", "name", gitOpsRepoName, "err", err)
@@ -236,7 +239,9 @@ func (impl ChartTemplateServiceImpl) createAndPushToGit(gitOpsRepoName, baseTemp
 		}
 	}
 	impl.logger.Debugw("template committed", "url", repoUrl, "commit", commit)
-
+	t2 = time.Now()
+	impl.logger.Infow("gitops operation time testing", "time", time.Now().String(), "time diff", t2.Unix()-t1.Unix(), "stage", "1.2")
+	t1 = t2
 	defer impl.CleanDir(clonedDir)
 	return &ChartGitAttribute{RepoUrl: repoUrl, ChartLocation: filepath.Join(baseTemplateName, version)}, nil
 }
