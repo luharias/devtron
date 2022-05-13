@@ -18,19 +18,17 @@
 package restHandler
 
 import (
-	"encoding/json"
-	"fmt"
-	"github.com/devtron-labs/devtron/api/restHandler/common"
-	client "github.com/devtron-labs/devtron/client/events"
-	"github.com/devtron-labs/devtron/client/pubsub"
-	"github.com/devtron-labs/devtron/pkg/git"
-	"github.com/devtron-labs/devtron/pkg/pipeline"
-	"github.com/gorilla/mux"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"time"
+
+	"github.com/devtron-labs/devtron/api/restHandler/common"
+	client "github.com/devtron-labs/devtron/client/events"
+	"github.com/devtron-labs/devtron/pkg/git"
+	"github.com/devtron-labs/devtron/pkg/pipeline"
+	"github.com/devtron-labs/devtron/util"
+	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 type WebhookEventHandler interface {
@@ -69,8 +67,7 @@ func (impl WebhookEventHandlerImpl) OnWebhookEvent(w http.ResponseWriter, r *htt
 		return
 	}
 
-	impl.logger.Debug("gitHostId", gitHostId)
-	impl.logger.Debug("secretFromRequest", secretFromRequest)
+	impl.logger.Debugw("webhook event request data", "gitHostId", gitHostId, "secretFromRequest", secretFromRequest)
 
 	// get git host from DB
 	gitHost, err := impl.gitHostConfig.GetById(gitHostId)
@@ -87,53 +84,25 @@ func (impl WebhookEventHandlerImpl) OnWebhookEvent(w http.ResponseWriter, r *htt
 		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	impl.logger.Infow("release info content ..", "string", string(requestBodyBytes))
-	impl.logger.Infow("release info content ..", "bytes", r.Header)
-	impl.logger.Infow("release info content ..", "X-GitHub-Event", r.Header.Get("X-GitHub-Event"))
-	impl.logger.Infow("release info content ..", "X-Hub-Signature", r.Header.Get("X-Hub-Signature"))
-	impl.logger.Infow("release info content ..", "SHA-1", r.Header.Get("SHA-1"))
-	data := make(map[string]interface{})
-	err = json.Unmarshal(requestBodyBytes, &data)
-	if err != nil {
-		impl.logger.Errorw("unmarshal error", "err", err)
-		return
-	}
-	action := data["action"].(string)
-	if action != "published" {
-		impl.logger.Infow("release info content .. no processing", "action", action)
-		return
-	} else {
-		impl.logger.Infow("release info content ..", "action", action)
-	}
-	releaseData := data["release"].(map[string]interface{})
-	releaseName := releaseData["name"].(string)
-	tagName := releaseData["tag_name"].(string)
-	createdAtString := releaseData["created_at"].(string)
-	createdAt, error := time.Parse("2006-01-02T15:04", createdAtString)
-	if error != nil {
-		fmt.Println(error)
-		//return
-	}
-	impl.logger.Infow("release info content ..", "releaseName", releaseName)
-	impl.logger.Infow("release info content ..", "tagName", tagName)
-	impl.logger.Infow("release info content ..", "bytes", r.Header)
-	impl.logger.Infow("release info content ..", "createdAt", createdAt)
 
 	isValidSig := impl.webhookSecretValidator.ValidateSecret(r, secretFromRequest, requestBodyBytes, gitHost)
-	impl.logger.Debug("Secret validation result ", isValidSig)
+	impl.logger.Debug("Secret validation result: " + strconv.FormatBool(isValidSig))
 	if !isValidSig {
 		impl.logger.Error("Signature mismatch")
 		common.WriteJsonResp(w, err, nil, http.StatusUnauthorized)
 		return
 	}
 
-	// validate event type
-	eventType := r.Header.Get(gitHost.EventTypeHeader)
-	impl.logger.Debugw("eventType : ", eventType)
-	if len(eventType) == 0 {
-		impl.logger.Errorw("Event type not known ", eventType)
-		common.WriteJsonResp(w, err, nil, http.StatusBadRequest)
-		return
+	// validate event type if configured
+	var eventType string
+	if len(gitHost.EventTypeHeader) > 0 {
+		eventType = r.Header.Get(gitHost.EventTypeHeader)
+		impl.logger.Debug("eventType: " + eventType)
+		if len(eventType) == 0 {
+			impl.logger.Errorw("Event type not known ", "eventType", eventType)
+			common.WriteJsonResp(w, err, nil, http.StatusBadRequest)
+			return
+		}
 	}
 
 	// make request to handle this webhook
@@ -152,7 +121,7 @@ func (impl WebhookEventHandlerImpl) OnWebhookEvent(w http.ResponseWriter, r *htt
 	}
 
 	// write event
-	err = impl.eventClient.WriteNatsEvent(pubsub.WEBHOOK_EVENT_TOPIC, webhookEvent)
+	err = impl.eventClient.WriteNatsEvent(util.WEBHOOK_EVENT_TOPIC, webhookEvent)
 	if err != nil {
 		impl.logger.Errorw("Error while handling webhook in git-sensor", "err", err)
 		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
