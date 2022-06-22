@@ -704,7 +704,6 @@ func (impl GitHubClient) CreateRepository(name, description, bitbucketWorkspaceI
 		&github.Repository{Name: &name,
 			Description: &description,
 			Private:     &private,
-			//			Visibility:  &visibility,
 		})
 	if err != nil {
 		impl.logger.Errorw("error in creating github repo, ", "repo", name, "err", err)
@@ -753,7 +752,7 @@ func (impl GitHubClient) createReadme(repoName, userName, userEmailId string) (s
 	cfg := &ChartConfig{
 		ChartName:      repoName,
 		ChartLocation:  "",
-		FileName:       "README.md",
+		FileName:       "README12.md",
 		FileContent:    "@devtron",
 		ReleaseMessage: "readme",
 		ChartRepoName:  repoName,
@@ -803,6 +802,7 @@ func (impl GitHubClient) CommitValues(config *ChartConfig, bitbucketWorkspaceId 
 			Name:  &config.UserName,
 		},
 	}
+
 	c, _, err := impl.client.Repositories.CreateFile(ctx, impl.org, config.ChartRepoName, path, options)
 	if err != nil {
 		impl.logger.Errorw("error in commit github", "err", err, "config", config)
