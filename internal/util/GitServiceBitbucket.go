@@ -37,15 +37,15 @@ func (impl GitBitbucketClient) DeleteRepository(name, userName, gitHubOrgName, a
 	return err
 }
 
-func (impl GitBitbucketClient) GetRepoUrl(repoName string, repoOptions *bitbucket.RepositoryOptions) (repoUrl string, err error) {
-	_, exists, err := impl.repoExists(repoOptions)
+func (impl GitBitbucketClient) GetRepoUrl(repoName string, repoOptions *bitbucket.RepositoryOptions) (defaultBranch string, repoUrl string, err error) {
+	defaultBranch, _, exists, err := impl.repoExists(repoOptions)
 	if err != nil {
-		return "", err
+		return defaultBranch, "", err
 	} else if !exists {
-		return "", fmt.Errorf("%s :repo not found", repoOptions.RepoSlug)
+		return defaultBranch, "", fmt.Errorf("%s :repo not found", repoOptions.RepoSlug)
 	} else {
 		repoUrl = fmt.Sprintf(BITBUCKET_CLONE_BASE_URL+"%s/%s.git", repoOptions.Owner, repoOptions.RepoSlug)
-		return repoUrl, nil
+		return defaultBranch, repoUrl, nil
 	}
 }
 func (impl GitBitbucketClient) CreateRepository(name, description, workSpaceId, projectKey, userName, userEmailId string) (url string, isNew bool, detailedErrorGitOpsConfigActions DetailedErrorGitOpsConfigActions) {
@@ -59,7 +59,7 @@ func (impl GitBitbucketClient) CreateRepository(name, description, workSpaceId, 
 		Description: description,
 		Project:     projectKey,
 	}
-	repoUrl, repoExists, err := impl.repoExists(repoOptions)
+	_, repoUrl, repoExists, err := impl.repoExists(repoOptions)
 	if err != nil {
 		impl.logger.Errorw("error in communication with bitbucket", "err", err)
 		detailedErrorGitOpsConfigActions.StageErrorMap[GetRepoUrlStage] = err
@@ -113,20 +113,20 @@ func (impl GitBitbucketClient) CreateRepository(name, description, workSpaceId, 
 	return repoUrl, true, detailedErrorGitOpsConfigActions
 }
 
-func (impl GitBitbucketClient) repoExists(repoOptions *bitbucket.RepositoryOptions) (repoUrl string, exists bool, err error) {
+func (impl GitBitbucketClient) repoExists(repoOptions *bitbucket.RepositoryOptions) (defaultBranch string, repoUrl string, exists bool, err error) {
 	repo, err := impl.client.Repositories.Repository.Get(repoOptions)
 	if repo == nil && err.Error() == BITBUCKET_REPO_NOT_FOUND_ERROR {
-		return "", false, nil
+		return "", "", false, nil
 	}
 	if err != nil {
-		return "", false, err
+		return "", "", false, err
 	}
 	repoUrl = fmt.Sprintf(BITBUCKET_CLONE_BASE_URL+"%s/%s.git", repoOptions.Owner, repoOptions.RepoSlug)
-	return repoUrl, true, nil
+	return "", repoUrl, true, nil
 }
 func (impl GitBitbucketClient) ensureProjectAvailabilityOnHttp(repoOptions *bitbucket.RepositoryOptions) (bool, error) {
 	for count := 0; count < 5; count++ {
-		_, exists, err := impl.repoExists(repoOptions)
+		_, _, exists, err := impl.repoExists(repoOptions)
 		if err == nil && exists {
 			impl.logger.Infow("repo validated successfully on https")
 			return true, nil

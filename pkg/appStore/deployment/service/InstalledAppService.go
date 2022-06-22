@@ -390,7 +390,7 @@ func (impl InstalledAppServiceImpl) performDeployStage(installedAppVersionId int
 			Project:  gitOpsConfigBitbucket.BitBucketProjectKey,
 			RepoSlug: installedAppVersion.AppStoreName,
 		}
-		repoUrl, err := impl.gitFactory.Client.GetRepoUrl(installedAppVersion.AppStoreName, bitbucketRepoOptions)
+		_, repoUrl, err := impl.gitFactory.Client.GetRepoUrl(installedAppVersion.AppStoreName, bitbucketRepoOptions)
 		if err != nil {
 			//will allow to continue to persist status on next operation
 			impl.logger.Errorw("fetching error", "err", err)

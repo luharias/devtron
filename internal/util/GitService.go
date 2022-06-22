@@ -59,7 +59,7 @@ const (
 type GitClient interface {
 	CreateRepository(name, description, bitbucketWorkspaceId, bitbucketProjectKey, userName, userEmailId string) (url string, isNew bool, detailedErrorGitOpsConfigActions DetailedErrorGitOpsConfigActions)
 	CommitValues(config *ChartConfig, bitbucketWorkspaceId string) (commitHash string, err error)
-	GetRepoUrl(projectName string, repoOptions *bitbucket.RepositoryOptions) (repoUrl string, err error)
+	GetRepoUrl(projectName string, repoOptions *bitbucket.RepositoryOptions) (defaultBranch string, repoUrl string, err error)
 	DeleteRepository(name, userName, gitHubOrgName, azureProjectName string, repoOptions *bitbucket.RepositoryOptions) error
 }
 
@@ -304,7 +304,7 @@ func (impl GitLabClient) DeleteRepository(name, userName, gitHubOrgName, azurePr
 func (impl GitLabClient) CreateRepository(name, description, bitbucketWorkspaceId, bitbucketProjectKey, userName, userEmailId string) (url string, isNew bool, detailedErrorGitOpsConfigActions DetailedErrorGitOpsConfigActions) {
 	detailedErrorGitOpsConfigActions.StageErrorMap = make(map[string]error)
 	impl.logger.Debugw("gitlab app create request ", "name", name, "description", description)
-	repoUrl, err := impl.GetRepoUrl(name, nil)
+	_, repoUrl, err := impl.GetRepoUrl(name, nil)
 	if err != nil {
 		impl.logger.Errorw("error in getting repo url ", "gitlab project", name, "err", err)
 		detailedErrorGitOpsConfigActions.StageErrorMap[GetRepoUrlStage] = err
@@ -420,20 +420,20 @@ func (impl GitLabClient) ensureProjectAvailabilityOnSsh(projectName string, repo
 	return false, nil
 }
 
-func (impl GitLabClient) GetRepoUrl(projectName string, repoOptions *bitbucket.RepositoryOptions) (repoUrl string, err error) {
+func (impl GitLabClient) GetRepoUrl(projectName string, repoOptions *bitbucket.RepositoryOptions) (defaultBranch string, repoUrl string, err error) {
 	pid := fmt.Sprintf("%s/%s", impl.config.GitlabGroupPath, projectName)
 	prop, res, err := impl.client.Projects.GetProject(pid, &gitlab.GetProjectOptions{})
 	if err != nil {
 		impl.logger.Debugw("gitlab get project err", "pid", pid, "err", err)
 		if res != nil && res.StatusCode == 404 {
-			return "", nil
+			return "", "", nil
 		}
-		return "", err
+		return "", "", err
 	}
 	if res.StatusCode >= 200 && res.StatusCode <= 299 {
-		return prop.HTTPURLToRepo, nil
+		return "", prop.HTTPURLToRepo, nil
 	}
-	return "", nil
+	return prop.DefaultBranch, "", nil
 }
 
 func (impl GitLabClient) createReadme(namespace, projectName, userName, userEmailId string) (res interface{}, err error) {
@@ -673,7 +673,7 @@ func (impl GitHubClient) CreateRepository(name, description, bitbucketWorkspaceI
 	detailedErrorGitOpsConfigActions.StageErrorMap = make(map[string]error)
 	ctx := context.Background()
 	repoExists := true
-	url, err := impl.GetRepoUrl(name, nil)
+	defaultBranch, url, err := impl.GetRepoUrl(name, nil)
 	if err != nil {
 		responseErr, ok := err.(*github.ErrorResponse)
 		if !ok || responseErr.Response.StatusCode != 404 {
@@ -684,7 +684,17 @@ func (impl GitHubClient) CreateRepository(name, description, bitbucketWorkspaceI
 			repoExists = false
 		}
 	}
+
 	if repoExists {
+		impl.logger.Infow("repo already exists", "checking default branch", defaultBranch)
+		if defaultBranch != "master" {
+			_, err = impl.createReadme(name, userName, userEmailId)
+			if err != nil {
+				impl.logger.Errorw("error in creating readme github", "project", name, "err", err)
+				detailedErrorGitOpsConfigActions.StageErrorMap[CreateReadmeStage] = err
+				return url, false, detailedErrorGitOpsConfigActions
+			}
+		}
 		detailedErrorGitOpsConfigActions.SuccessfulStages = append(detailedErrorGitOpsConfigActions.SuccessfulStages, GetRepoUrlStage)
 		return url, false, detailedErrorGitOpsConfigActions
 	}
@@ -801,20 +811,20 @@ func (impl GitHubClient) CommitValues(config *ChartConfig, bitbucketWorkspaceId 
 	return *c.SHA, nil
 }
 
-func (impl GitHubClient) GetRepoUrl(projectName string, repoOptions *bitbucket.RepositoryOptions) (repoUrl string, err error) {
+func (impl GitHubClient) GetRepoUrl(projectName string, repoOptions *bitbucket.RepositoryOptions) (defaultBranch string, repoUrl string, err error) {
 	ctx := context.Background()
 	repo, _, err := impl.client.Repositories.Get(ctx, impl.org, projectName)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return *repo.CloneURL, nil
+	return *repo.DefaultBranch, *repo.CloneURL, nil
 }
 
 func (impl GitHubClient) ensureProjectAvailabilityOnHttp(projectName string) (bool, error) {
 	count := 0
 	for count < 3 {
 		count = count + 1
-		_, err := impl.GetRepoUrl(projectName, nil)
+		_, _, err := impl.GetRepoUrl(projectName, nil)
 		if err == nil {
 			return true, nil
 		}

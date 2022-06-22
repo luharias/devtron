@@ -18,14 +18,14 @@ type GitAzureClient struct {
 	gitService GitService
 }
 
-func (impl GitAzureClient) GetRepoUrl(repoName string, repoOptions *bitbucket.RepositoryOptions) (repoUrl string, err error) {
-	url, exists, err := impl.repoExists(repoName, impl.project)
+func (impl GitAzureClient) GetRepoUrl(repoName string, repoOptions *bitbucket.RepositoryOptions) (defaultBranch string, repoUrl string, err error) {
+	_, url, exists, err := impl.repoExists(repoName, impl.project)
 	if err != nil {
-		return "", err
+		return "","", err
 	} else if !exists {
-		return "", fmt.Errorf("%s :repo not found", repoName)
+		return "","", fmt.Errorf("%s :repo not found", repoName)
 	} else {
-		return url, nil
+		return "", url, nil
 	}
 }
 
@@ -59,7 +59,7 @@ func (impl GitAzureClient) DeleteRepository(name, userName, gitHubOrgName, azure
 func (impl GitAzureClient) CreateRepository(name, description, bitbucketWorkspaceId, bitbucketProjectKey, userName, userEmailId string) (url string, isNew bool, detailedErrorGitOpsConfigActions DetailedErrorGitOpsConfigActions) {
 	detailedErrorGitOpsConfigActions.StageErrorMap = make(map[string]error)
 	ctx := context.Background()
-	url, repoExists, err := impl.repoExists(name, impl.project)
+	_, url, repoExists, err := impl.repoExists(name, impl.project)
 	if err != nil {
 		impl.logger.Errorw("error in communication with azure", "err", err)
 		detailedErrorGitOpsConfigActions.StageErrorMap[GetRepoUrlStage] = err
@@ -235,7 +235,7 @@ func (impl GitAzureClient) CommitValues(config *ChartConfig, bitbucketWorkspaceI
 	return commitId, nil
 }
 
-func (impl GitAzureClient) repoExists(repoName, projectName string) (repoUrl string, exists bool, err error) {
+func (impl GitAzureClient) repoExists(repoName, projectName string) (defaultBranch string, repoUrl string, exists bool, err error) {
 	ctx := context.Background()
 	// Get first page of the list of team projects for your organization
 	clientAzure := *impl.client
@@ -246,21 +246,21 @@ func (impl GitAzureClient) repoExists(repoName, projectName string) (repoUrl str
 	notFoundStatus := 404
 	if err != nil {
 		if e, ok := err.(azuredevops.WrappedError); ok && *e.StatusCode == notFoundStatus {
-			return "", false, nil
+			return "", "", false, nil
 		} else {
-			return "", false, err
+			return "", "", false, err
 		}
 
 	}
 	for gitRepository == nil {
-		return "", false, nil
+		return "", "", false, nil
 	}
-	return *gitRepository.WebUrl, true, nil
+	return *gitRepository.DefaultBranch, *gitRepository.WebUrl, true, nil
 }
 
 func (impl GitAzureClient) ensureProjectAvailabilityOnHttp(repoName string) (bool, error) {
 	for count := 0; count < 5; count++ {
-		_, exists, err := impl.repoExists(repoName, impl.project)
+		_, _, exists, err := impl.repoExists(repoName, impl.project)
 		if err == nil && exists {
 			impl.logger.Infow("repo validated successfully on https")
 			return true, nil
