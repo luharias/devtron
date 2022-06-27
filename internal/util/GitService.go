@@ -548,11 +548,12 @@ func (impl GitServiceImpl) CommitAndPushAllChanges(repoRoot, commitMsg, name, em
 	})
 	if err != nil {
 		impl.logger.Errorw("error while checkout to master", "err", err)
-		return "", err
+		//return "", err
 	}
 
 	err = workTree.AddGlob("")
 	if err != nil {
+		impl.logger.Errorw("error while AddGlob", "err", err)
 		return "", err
 	}
 	//--  commit
@@ -569,6 +570,7 @@ func (impl GitServiceImpl) CommitAndPushAllChanges(repoRoot, commitMsg, name, em
 		},
 	})
 	if err != nil {
+		impl.logger.Errorw("error while worktree commit", "err", err)
 		return "", err
 	}
 	impl.logger.Debugw("git hash", "repo", repoRoot, "hash", commit.String())
@@ -594,6 +596,7 @@ func (impl GitServiceImpl) ForceResetHead(repoRoot string) (err error) {
 	if err != nil {
 		return err
 	}
+
 	err = workTree.Reset(&git.ResetOptions{Mode: git.HardReset})
 	if err != nil {
 		return err
@@ -715,7 +718,7 @@ func (impl GitHubClient) CreateRepository(name, description, bitbucketWorkspaceI
 
 	if repoExists {
 		impl.logger.Infow("repo already exists", "checking default branch", defaultBranch)
-		/*if defaultBranch != "master2" {
+		/*if defaultBranch != "master" {
 			_, err = impl.createReadme(name, userName, userEmailId)
 			if err != nil {
 				impl.logger.Errorw("error in creating readme github", "project", name, "err", err)

@@ -93,14 +93,23 @@ func (impl *GitCliUtil) Init(rootDir string, remoteUrl string, isBare bool) erro
 }
 
 func (impl *GitCliUtil) Clone(rootDir string, remoteUrl string, username string, password string) (response, errMsg string, err error) {
-	impl.logger.Infow("input", rootDir, remoteUrl, username, password)
+	impl.logger.Infow("input", "rootDir", rootDir, "remoteUrl", remoteUrl, "username", username, "password", password)
 	err = impl.Init(rootDir, remoteUrl, false)
 	if err != nil {
+		impl.logger.Errorw("error on git init for clone", "err", err)
 		return "", "", err
 	}
 	response, errMsg, err = impl.Fetch(rootDir, username, password)
+	if err != nil {
+		impl.logger.Errorw("error on git fetch", "err", err)
+		return response, errMsg, err
+	}
 	if err == nil && errMsg == "" {
 		response, errMsg, err = impl.Pull(rootDir, username, password, "master")
+		if err != nil {
+			impl.logger.Errorw("error on git pull - master", "err", err)
+			return response, errMsg, err
+		}
 	}
 	return response, errMsg, err
 }
