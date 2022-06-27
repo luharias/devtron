@@ -20,6 +20,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"gopkg.in/src-d/go-git.v4/plumbing"
 	"io/ioutil"
 	http2 "net/http"
 	"net/url"
@@ -538,6 +539,18 @@ func (impl GitServiceImpl) CommitAndPushAllChanges(repoRoot, commitMsg, name, em
 	if err != nil {
 		return "", err
 	}
+	err = workTree.Checkout(&git.CheckoutOptions{
+		Hash:   plumbing.Hash{},
+		Branch: "master",
+		Create: true,
+		Force:  false,
+		Keep:   true,
+	})
+	if err != nil {
+		impl.logger.Errorw("error while checkout to master", "err", err)
+		return "", err
+	}
+
 	err = workTree.AddGlob("")
 	if err != nil {
 		return "", err
@@ -589,6 +602,21 @@ func (impl GitServiceImpl) ForceResetHead(repoRoot string) (err error) {
 		Auth:         impl.Auth,
 		Force:        true,
 		SingleBranch: true,
+	})
+	return err
+}
+
+func (impl GitServiceImpl) CheckoutToMaster(repoRoot string) (err error) {
+	_, workTree, err := impl.getRepoAndWorktree(repoRoot)
+	if err != nil {
+		return err
+	}
+	err = workTree.Checkout(&git.CheckoutOptions{
+		Hash:   plumbing.Hash{},
+		Branch: "master",
+		Create: true,
+		Force:  false,
+		Keep:   true,
 	})
 	return err
 }
@@ -687,14 +715,14 @@ func (impl GitHubClient) CreateRepository(name, description, bitbucketWorkspaceI
 
 	if repoExists {
 		impl.logger.Infow("repo already exists", "checking default branch", defaultBranch)
-		if defaultBranch != "master" {
+		/*if defaultBranch != "master2" {
 			_, err = impl.createReadme(name, userName, userEmailId)
 			if err != nil {
 				impl.logger.Errorw("error in creating readme github", "project", name, "err", err)
 				detailedErrorGitOpsConfigActions.StageErrorMap[CreateReadmeStage] = err
 				return url, false, detailedErrorGitOpsConfigActions
 			}
-		}
+		}*/
 		detailedErrorGitOpsConfigActions.SuccessfulStages = append(detailedErrorGitOpsConfigActions.SuccessfulStages, GetRepoUrlStage)
 		return url, false, detailedErrorGitOpsConfigActions
 	}

@@ -204,7 +204,6 @@ func (impl ChartTemplateServiceImpl) BuildChartAndPushToGitRepo(chartMetaData *c
 		impl.logger.Errorw("error in creating archive", "err", err)
 		return err
 	}
-
 	err = impl.pushChartToGitRepo(gitOpsRepoName, referenceTemplate, version, tempReferenceTemplateDir, repoUrl, userId)
 	if err != nil {
 		impl.logger.Errorw("error in pushing chart to git ", "err", err)
