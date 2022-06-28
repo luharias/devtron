@@ -101,6 +101,13 @@ func (impl *GitCliUtil) Clone(rootDir string, remoteUrl string, username string,
 	response, errMsg, err = impl.Fetch(rootDir, username, password)
 	if err == nil && errMsg == "" {
 		response, errMsg, err = impl.Pull(rootDir, username, password, "master")
+		if err != nil {
+			response, errMsg, err = impl.Pull(rootDir, username, password, "main")
+		}
+		if err != nil {
+			err = &ApiError{HttpStatusCode: 0, InternalMessage: "unable to pull main or master branch", UserMessage: "unable to pull main or master branch"}
+			return response, errMsg, err
+		}
 	}
 	return response, errMsg, err
 }
